@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { scroll-behavior: smooth; }
+h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif; }
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.card-tilt { transition: transform .25s ease, box-shadow .25s ease; transform-style: preserve-3d; }
+.scanline::after {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background: linear-gradient(to bottom, transparent, rgba(34,211,238,0.06), transparent);
+  height: 60%; animation: scanline 6s linear infinite;
+}
