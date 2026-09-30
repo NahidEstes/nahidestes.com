@@ -6,19 +6,20 @@ export interface ArticleImage {
   caption?: string;
   width?: number;
   height?: number;
+  decorative?: boolean;
 }
 
 export type ArticleBlock =
-  | { type: "paragraph"; text: string }
-  | { type: "heading" | "subheading"; text: string }
-  | { type: "image"; image: ArticleImage; fullWidth?: boolean }
-  | { type: "text-image"; text: string; image: ArticleImage; imagePosition?: "left" | "right" }
-  | { type: "gallery"; images: ArticleImage[] }
-  | { type: "blockquote" | "pullquote"; text: string; source?: string; variant?: "inline" | "overlay"; image?: ArticleImage }
-  | { type: "ordered-list" | "unordered-list"; items: string[] }
-  | { type: "divider" }
-  | { type: "video"; url: string; title?: string }
-  | { type: "callout"; title?: string; text: string };
+  | { id?: string; type: "paragraph"; text: string }
+  | { id?: string; type: "heading" | "subheading"; text: string }
+  | { id?: string; type: "image"; image: ArticleImage; fullWidth?: boolean }
+  | { id?: string; type: "text-image"; text: string; image: ArticleImage; imagePosition?: "left" | "right"; emphasis?: "balanced" | "image" | "text" }
+  | { id?: string; type: "gallery"; images: ArticleImage[]; layout?: "grid" | "two-columns" | "editorial-strip" | "full-width" }
+  | { id?: string; type: "blockquote" | "pullquote"; text: string; source?: string; variant?: "inline" | "card" | "overlay"; image?: ArticleImage }
+  | { id?: string; type: "ordered-list" | "unordered-list"; items: string[] }
+  | { id?: string; type: "divider" }
+  | { id?: string; type: "video"; url: string; title?: string }
+  | { id?: string; type: "callout"; title?: string; text: string };
 
 export interface ArticleSection {
   id?: string;
@@ -35,6 +36,10 @@ export interface ContentItem {
   content: string;
   featuredImage: string;
   imageAlt: string;
+  featuredImageCaption?: string;
+  featuredImageWidth?: number;
+  featuredImageHeight?: number;
+  featuredImageDecorative?: boolean;
   category: string;
   tags: string[];
   location?: string;
@@ -50,13 +55,40 @@ export interface ContentItem {
   authorTitle?: string;
   authorBio?: string;
   authorImage?: string;
+  authorImageAlt?: string;
+  authorImageCaption?: string;
+  authorImageWidth?: number;
+  authorImageHeight?: number;
+  authorImageDecorative?: boolean;
   readingTime?: number;
   modifiedAt?: string;
   ogImage?: string;
+  ogImageAlt?: string;
+  ogImageCaption?: string;
+  ogImageWidth?: number;
+  ogImageHeight?: number;
+  ogImageDecorative?: boolean;
   technologies?: string[];
   projectUrl?: string;
   repositoryUrl?: string;
   year?: number;
+  deletedAt?: string | null;
+  version?: number;
+}
+
+export type ContentCollection = "posts" | "projects" | "photography" | "places";
+
+export interface AdminContentRow {
+  _id: string;
+  collection: ContentCollection;
+  contentType: string;
+  title: string;
+  slug: string;
+  status: string;
+  isFeatured?: boolean;
+  updatedAt?: string;
+  createdAt?: string;
+  deletedAt?: string | null;
 }
 
 export interface SiteSettingsData {

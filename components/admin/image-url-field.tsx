@@ -1,0 +1,12 @@
+"use client";
+/* eslint-disable @next/next/no-img-element */
+
+import { useState } from "react";
+import type { ArticleImage } from "@/types/content";
+
+export function ImageUrlField({ value, onChange, label = "Image", error, compact = false }: { value: ArticleImage; onChange: (value: ArticleImage) => void; label?: string; error?: string; compact?: boolean }) {
+  const [broken, setBroken] = useState(false);
+  const valid = /^https:\/\/[^\s]+$/i.test(value.url);
+  const update = <K extends keyof ArticleImage>(key: K, next: ArticleImage[K]) => onChange({ ...value, [key]: next });
+  return <fieldset className={`image-url-field ${compact ? "compact" : ""}`}><legend>{label}</legend><div className="field"><label>HTTPS image URL</label><input type="url" value={value.url} onChange={(event) => { update("url", event.target.value); setBroken(false); }} placeholder="https://example.com/image.jpg" aria-invalid={Boolean(error)}/>{error && <span className="field-error">{error}</span>}<small>Direct uploads are temporarily disabled. Paste an existing HTTPS image URL. Add new public image hostnames to the exact allowlist in next.config.ts before publishing.</small></div>{value.url && <div className={`image-url-preview ${!valid || broken ? "invalid" : ""}`}>{valid && !broken ? <img src={value.url} alt={value.decorative ? "" : value.alt || "Preview"} referrerPolicy="no-referrer" onError={() => setBroken(true)}/> : <p>{broken ? "The image could not be loaded." : "Enter a valid HTTPS image URL."}</p>}</div>}<div className="field"><label>Alt text</label><input value={value.alt} onChange={(event) => update("alt", event.target.value)} disabled={Boolean(value.decorative)} placeholder="Describe the meaningful content of the image"/><label className="check-label"><input type="checkbox" checked={Boolean(value.decorative)} onChange={(event) => update("decorative", event.target.checked)}/> Decorative image</label></div><div className="field"><label>Caption (optional)</label><input value={value.caption || ""} onChange={(event) => update("caption", event.target.value)}/></div><div className="field-grid"><div className="field"><label>Width (optional)</label><input type="number" min="1" value={value.width || ""} onChange={(event) => update("width", event.target.value ? Number(event.target.value) : undefined)}/></div><div className="field"><label>Height (optional)</label><input type="number" min="1" value={value.height || ""} onChange={(event) => update("height", event.target.value ? Number(event.target.value) : undefined)}/></div></div></fieldset>;
+}

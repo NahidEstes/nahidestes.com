@@ -1,45 +1,81 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
-import { Post } from "@/models/Post";
-import { Project } from "@/models/Project";
-import { PhotographyGallery } from "@/models/PhotographyGallery";
-import { PlaceStory } from "@/models/PlaceStory";
-import { Category } from "@/models/Category";
-import { Subscriber } from "@/models/Subscriber";
-import { ContactMessage } from "@/models/ContactMessage";
-import { SiteSettings } from "@/models/SiteSettings";
-import { contentSchema } from "@/lib/validation";
-import sanitizeHtml from "sanitize-html";
-import { z } from "zod";
+import {
+  apiError, apiSuccess, collectionLabel, getAdminModel, isAdminCollection, isContentCollection,
+  isDuplicateKeyError, requireAdminActor, toFieldErrors,
+} from "@/lib/admin/api";
+import { sanitizeContentPayload, schemaForCollection, validateContentImageFields } from "@/lib/validation";
 
-const models = { posts: Post, projects: Project, photography: PhotographyGallery, places: PlaceStory, categories: Category, subscribers: Subscriber, messages: ContactMessage, settings: SiteSettings };
-const getModel = (name: string) => models[name as keyof typeof models];
-const categorySchema=z.object({name:z.string().trim().min(2).max(80),slug:z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),type:z.enum(["post","project","photography","place"])});
-const settingsSchema=z.object({siteTitle:z.string().min(2).max(100),tagline:z.string().max(180),biography:z.string().min(20).max(3000),profileImage:z.url(),email:z.email(),socialLinks:z.record(z.string(),z.string())});
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ collection: string }> }) {
-  if (!await getServerSession(authOptions)) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (!await connectDB()) return NextResponse.json([]);
-  const model = getModel((await params).collection);
-  if (!model) return NextResponse.json({ message: "Unknown collection" }, { status: 404 });
-  const q = new URL(request.url).searchParams.get("q");
-  const searchField=(await params).collection==="subscribers"?"email":(await params).collection==="messages"?"subject":"title";
-  const docs = await model.find(q ? { [searchField]: { $regex: q, $options: "i" } } : {}).sort({ createdAt: -1 }).limit(100).lean();
-  return NextResponse.json(docs);
+  const auth = await requireAdminActor();
+  if ("response" in auth) return auth.response;
+  const { collection } = await params;
+  if (!isAdminCollection(collection)) return apiError(404, "UNKNOWN_COLLECTION", "Unknown collection.");
+  if (auth.actor.role !== "admin" && !isContentCollection(collection)) return apiError(403, "FORBIDDEN", "Editors can only access content collections.");
+  if (!await connectDB()) return apiError(503, "DATABASE_UNAVAILABLE", "MongoDB is not configured or unavailable.");
+
+  const model = getAdminModel(collection);
+  const url = new URL(request.url);
+  const query = url.searchParams.get("q")?.trim();
+  const trash = url.searchParams.get("trash") === "true";
+  if (trash && (!isContentCollection(collection) || auth.actor.role !== "admin")) return apiError(403, "FORBIDDEN", "Only administrators can view Trash.");
+
+  const filter: Record<string, unknown> = {};
+  if (isContentCollection(collection)) filter.deletedAt = trash ? { $ne: null } : null;
+  if (query) {
+    const field = collection === "subscribers" ? "email" : collection === "messages" ? "subject" : collection === "categories" ? "name" : "title";
+    filter[field] = { $regex: escapeRegex(query), $options: "i" };
+  }
+  const docs = await model.find(filter).sort({ updatedAt: -1, createdAt: -1 }).limit(100).lean();
+  const data = isContentCollection(collection)
+    ? docs.map((doc) => ({ ...doc, collection, contentType: collectionLabel(collection) }))
+    : docs;
+  return apiSuccess(data);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ collection: string }> }) {
-  if (!await getServerSession(authOptions)) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (!await connectDB()) return NextResponse.json({ message: "MongoDB is not configured" }, { status: 503 });
-  const collection=(await params).collection; const model = getModel(collection);
-  if (!model) return NextResponse.json({ message: "Unknown collection" }, { status: 404 });
-  const body = await request.json(); delete body.passwordHash;
-  let payload:Record<string,unknown>=body;
-  if (["posts","projects","photography","places"].includes(collection)) { const parsed=contentSchema.safeParse(body); if(!parsed.success)return NextResponse.json({message:parsed.error.issues[0]?.message||"Invalid content"},{status:400}); payload={...parsed.data,content:sanitizeHtml(parsed.data.content)}; }
-  if(collection==="categories"){const parsed=categorySchema.safeParse(body);if(!parsed.success)return NextResponse.json({message:parsed.error.issues[0]?.message||"Invalid category"},{status:400});payload=parsed.data;}
-  if(collection==="settings"){const parsed=settingsSchema.safeParse(body);if(!parsed.success)return NextResponse.json({message:parsed.error.issues[0]?.message||"Invalid settings"},{status:400});const doc=await SiteSettings.findOneAndUpdate({key:"primary"},{key:"primary",...parsed.data},{new:true,upsert:true});return NextResponse.json(doc);}
-  const doc = await model.create(payload);
-  return NextResponse.json(doc, { status: 201 });
+  const auth = await requireAdminActor();
+  if ("response" in auth) return auth.response;
+  const { collection } = await params;
+  if (!isAdminCollection(collection)) return apiError(404, "UNKNOWN_COLLECTION", "Unknown collection.");
+  if (auth.actor.role !== "admin" && !isContentCollection(collection)) return apiError(403, "FORBIDDEN", "Editors can only create content.");
+  if (collection === "messages") return apiError(405, "METHOD_NOT_ALLOWED", "Messages cannot be created from the admin API.");
+  if (!await connectDB()) return apiError(503, "DATABASE_UNAVAILABLE", "MongoDB is not configured or unavailable.");
+
+  let body: unknown;
+  try { body = await request.json(); } catch { return apiError(400, "INVALID_JSON", "The request body is not valid JSON."); }
+  const parsed = schemaForCollection(collection, false).safeParse(body);
+  if (!parsed.success) return apiError(400, "VALIDATION_ERROR", "Please correct the highlighted fields.", toFieldErrors(parsed.error.issues));
+  let payload = parsed.data as Record<string, unknown>;
+
+  if (isContentCollection(collection)) {
+    if (auth.actor.role === "editor" && payload.status !== "draft") return apiError(403, "PUBLISH_FORBIDDEN", "Editors can save drafts but cannot publish or schedule content.");
+    const imageErrors = validateContentImageFields(payload);
+    if (Object.keys(imageErrors).length) return apiError(400, "VALIDATION_ERROR", "Please correct the highlighted image fields.", imageErrors);
+    const model = getAdminModel(collection);
+    if (await model.exists({ slug: payload.slug })) return apiError(409, "DUPLICATE_SLUG", "This slug is already in use.", { slug: ["Choose a unique slug."] });
+    payload = sanitizeContentPayload(payload);
+    payload.version = 1;
+    payload.deletedAt = null;
+    if (collection === "projects" || collection === "photography") {
+      payload.description = payload.excerpt;
+      payload.coverImage = payload.featuredImage;
+    }
+  }
+
+  try {
+    if (collection === "settings") {
+      const model = getAdminModel(collection);
+      const doc = await model.findOneAndUpdate({ key: "primary" }, { key: "primary", ...payload }, { returnDocument: "after", upsert: true, runValidators: true }).lean();
+      return apiSuccess(doc, 201);
+    }
+    const doc = await getAdminModel(collection).create(payload);
+    return apiSuccess(doc.toObject(), 201);
+  } catch (error) {
+    if (isDuplicateKeyError(error)) return apiError(409, "DUPLICATE_VALUE", "A record with this unique value already exists.");
+    return apiError(500, "SAVE_FAILED", "The record could not be saved.");
+  }
 }

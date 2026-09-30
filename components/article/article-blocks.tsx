@@ -29,15 +29,26 @@ export function ArticleBlockView({ block }: { block: ArticleBlock }) {
   if (block.type === "heading") return <h3 className="article-subheading">{block.text}</h3>;
   if (block.type === "subheading") return <h4 className="article-minor-heading">{block.text}</h4>;
   if (block.type === "image") return <ArticlePicture image={block.image} className={block.fullWidth ? "full" : ""}/>;
-  if (block.type === "text-image") return <div className={`article-split-block image-${block.imagePosition || "right"}`}><div className="article-richtext" dangerouslySetInnerHTML={{__html:clean(block.text)}}/><ArticlePicture image={block.image}/></div>;
-  if (block.type === "gallery") return <div className="article-gallery">{block.images.map((image,index)=><ArticlePicture key={`${image.url}-${index}`} image={image}/>)}</div>;
-  if (block.type === "blockquote" || (block.type === "pullquote" && block.variant !== "overlay")) return <blockquote className="article-pullquote"><span>“</span><p>{block.text}</p>{block.source&&<cite>— {block.source}</cite>}</blockquote>;
+  if (block.type === "text-image") return <div className={`article-split-block image-${block.imagePosition || "right"} emphasis-${block.emphasis || "balanced"}`}><div className="article-richtext" dangerouslySetInnerHTML={{__html:clean(block.text)}}/><ArticlePicture image={block.image}/></div>;
+  if (block.type === "gallery") return <div className={`article-gallery layout-${block.layout || "grid"}`}>{block.images.map((image,index)=><ArticlePicture key={`${image.url}-${index}`} image={image}/>)}</div>;
+  if (block.type === "blockquote" || (block.type === "pullquote" && block.variant !== "overlay")) return <blockquote className={`article-pullquote variant-${block.variant || "inline"}`}><span>“</span><p>{block.text}</p>{block.source&&<cite>— {block.source}</cite>}</blockquote>;
   if (block.type === "pullquote" && block.variant === "overlay" && block.image) return <div className="article-quote-image"><ArticlePicture image={block.image}/><blockquote><span>“</span><p>{block.text}</p>{block.source&&<cite>— {block.source}</cite>}</blockquote></div>;
   if (block.type === "ordered-list" || block.type === "unordered-list") { const Tag=block.type === "ordered-list" ? "ol" : "ul"; return <Tag className="article-list">{block.items.map(item=><li key={item}>{item}</li>)}</Tag>; }
   if (block.type === "divider") return <hr className="article-divider"/>;
-  if (block.type === "video") return <div className="article-video"><iframe src={block.url} title={block.title || "Article video"} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen/></div>;
-  if (block.type === "callout") return <aside className="article-callout">{block.title&&<h4>{block.title}</h4>}<p>{block.text}</p></aside>;
+  if (block.type === "video") return <div className="article-video"><iframe src={embedUrl(block.url)} title={block.title || "Article video"} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen/></div>;
+  if (block.type === "callout") return <aside className="article-callout">{block.title&&<h4>{block.title}</h4>}<div dangerouslySetInnerHTML={{__html:clean(block.text)}}/></aside>;
   return null;
+}
+
+function embedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.hostname === "youtu.be") return `https://www.youtube.com/embed/${url.pathname.slice(1)}`;
+    if (url.hostname === "youtube.com" || url.hostname === "www.youtube.com") return url.pathname.startsWith("/embed/") ? url.toString() : `https://www.youtube.com/embed/${url.searchParams.get("v") || ""}`;
+    if (url.hostname === "vimeo.com") return `https://player.vimeo.com/video/${url.pathname.slice(1)}`;
+    if (url.hostname === "player.vimeo.com") return url.toString();
+  } catch { return ""; }
+  return "";
 }
 
 export function ArticleSections({ sections, gallery = [] }: { sections: ArticleSection[]; gallery?: ArticleImage[] }) {
@@ -46,6 +57,6 @@ export function ArticleSections({ sections, gallery = [] }: { sections: ArticleS
     if (image && !blocks.some(block => block.type === "image" || block.type === "text-image" || block.type === "gallery" || (block.type === "pullquote" && block.variant === "overlay"))) {
       const first = blocks.shift(); if (first?.type === "paragraph") blocks.unshift({ type:"text-image", text:first.text, image, imagePosition:index%2?"left":"right" }); else { if(first)blocks.unshift(first); blocks.push({type:"image",image,fullWidth:index%3===2}); }
     }
-    return <section className="article-content-section" id={section.id} key={section.id}><header><span>{section.number}</span><i/><h2>{section.heading}</h2></header>{blocks.map((block,blockIndex)=><ArticleBlockView key={`${section.id}-${blockIndex}`} block={block}/>)}</section>;
+    return <section className="article-content-section" id={section.id} key={section.id}><header><span>{section.number}</span><i/><h2>{section.heading}</h2></header>{blocks.map((block,blockIndex)=><ArticleBlockView key={block.id || `${section.id}-${blockIndex}`} block={block}/>)}</section>;
   })}</>;
 }

@@ -19,7 +19,7 @@ const themeScript = `(function(){try{var stored=localStorage.getItem('nahid-them
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${body.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }}/></head>
       <body><ThemeController/>{children}</body>
     </html>

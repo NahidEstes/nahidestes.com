@@ -9,23 +9,23 @@ import { SiteSettings } from "@/models/SiteSettings";
 
 const modelMap = { posts: Post, projects: Project, photography: PhotographyGallery, places: PlaceStory };
 
-function normalize(item: Record<string, unknown>): ContentItem {
+export function normalizeContentItem(item: Record<string, unknown>): ContentItem {
   return {
-    _id: String(item._id || ""), title: String(item.title || ""), slug: String(item.slug || ""), excerpt: String(item.excerpt || item.description || ""), content: String(item.content || ""), featuredImage: String(item.featuredImage || item.coverImage || ""), imageAlt: String(item.imageAlt || item.title || ""), category: String(item.category || (Array.isArray(item.categories) ? item.categories[0] : "")), tags: Array.isArray(item.tags) ? item.tags.map(String) : [], location: item.location ? String(item.location) : undefined, country: item.country ? String(item.country) : undefined, status: (item.status as ContentItem["status"]) || "published", publishedAt: new Date(String(item.publishedAt || item.createdAt || Date.now())).toISOString(), modifiedAt: item.updatedAt ? new Date(String(item.updatedAt)).toISOString() : undefined, isFeatured: Boolean(item.isFeatured), seoTitle: item.seoTitle ? String(item.seoTitle) : undefined, seoDescription: item.seoDescription ? String(item.seoDescription) : undefined, ogImage: item.ogImage ? String(item.ogImage) : undefined, gallery: Array.isArray(item.gallery) ? item.gallery as ContentItem["gallery"] : undefined, sections: Array.isArray(item.sections) ? item.sections as ContentItem["sections"] : undefined, authorName: item.authorName ? String(item.authorName) : undefined, authorTitle: item.authorTitle ? String(item.authorTitle) : undefined, authorBio: item.authorBio ? String(item.authorBio) : undefined, authorImage: item.authorImage ? String(item.authorImage) : undefined, readingTime: item.readingTime ? Number(item.readingTime) : undefined, technologies: Array.isArray(item.technologies) ? item.technologies.map(String) : undefined, projectUrl: item.projectUrl ? String(item.projectUrl) : undefined, repositoryUrl: item.repositoryUrl ? String(item.repositoryUrl) : undefined, year: item.year ? Number(item.year) : undefined,
+    _id: String(item._id || ""), title: String(item.title || ""), slug: String(item.slug || ""), excerpt: String(item.excerpt || item.description || ""), content: String(item.content || ""), featuredImage: String(item.featuredImage || item.coverImage || ""), imageAlt: String(item.imageAlt || item.title || ""), featuredImageCaption: item.featuredImageCaption ? String(item.featuredImageCaption) : undefined, featuredImageWidth: item.featuredImageWidth ? Number(item.featuredImageWidth) : undefined, featuredImageHeight: item.featuredImageHeight ? Number(item.featuredImageHeight) : undefined, featuredImageDecorative: Boolean(item.featuredImageDecorative), category: String(item.category || (Array.isArray(item.categories) ? item.categories[0] : "")), tags: Array.isArray(item.tags) ? item.tags.map(String) : [], location: item.location ? String(item.location) : undefined, country: item.country ? String(item.country) : undefined, status: (item.status as ContentItem["status"]) || "published", publishedAt: new Date(String(item.publishedAt || item.createdAt || Date.now())).toISOString(), modifiedAt: item.updatedAt ? new Date(String(item.updatedAt)).toISOString() : undefined, isFeatured: Boolean(item.isFeatured), seoTitle: item.seoTitle ? String(item.seoTitle) : undefined, seoDescription: item.seoDescription ? String(item.seoDescription) : undefined, ogImage: item.ogImage ? String(item.ogImage) : undefined, ogImageAlt: item.ogImageAlt ? String(item.ogImageAlt) : undefined, gallery: Array.isArray(item.gallery) ? item.gallery as ContentItem["gallery"] : undefined, sections: Array.isArray(item.sections) ? item.sections as ContentItem["sections"] : undefined, authorName: item.authorName ? String(item.authorName) : undefined, authorTitle: item.authorTitle ? String(item.authorTitle) : undefined, authorBio: item.authorBio ? String(item.authorBio) : undefined, authorImage: item.authorImage ? String(item.authorImage) : undefined, authorImageAlt: item.authorImageAlt ? String(item.authorImageAlt) : undefined, readingTime: item.readingTime ? Number(item.readingTime) : undefined, technologies: Array.isArray(item.technologies) ? item.technologies.map(String) : undefined, projectUrl: item.projectUrl ? String(item.projectUrl) : undefined, repositoryUrl: item.repositoryUrl ? String(item.repositoryUrl) : undefined, year: item.year ? Number(item.year) : undefined, deletedAt: item.deletedAt ? new Date(String(item.deletedAt)).toISOString() : null, version: Number(item.version || 0),
   };
 }
 
 export async function getItems(kind: ContentKind, options: { featured?: boolean; limit?: number; category?: string; tag?: string; query?: string; page?: number } = {}) {
   try {
     if (!await connectDB()) throw new Error("No database configured");
-    const filter: Record<string, unknown> = { status: "published" };
+    const filter: Record<string, unknown> = { status: "published", deletedAt: null };
     if (options.featured) filter.isFeatured = true;
     if (options.category) filter.category = options.category;
     if (options.tag) filter.tags = options.tag;
     if (options.query) filter.$text = { $search: options.query };
     const limit = options.limit || 12;
     const docs = await modelMap[kind].find(filter).sort({ publishedAt: -1, order: 1 }).skip(((options.page || 1) - 1) * limit).limit(limit).lean();
-    return docs.map((doc) => normalize(doc as Record<string, unknown>));
+    return docs.map((doc) => normalizeContentItem(doc as Record<string, unknown>));
   } catch {
     let result = [...samples[kind]];
     if (options.featured) result = result.filter((item) => item.isFeatured);
@@ -40,8 +40,8 @@ export async function getItems(kind: ContentKind, options: { featured?: boolean;
 export async function getItem(kind: ContentKind, slug: string) {
   try {
     if (!await connectDB()) throw new Error("No database configured");
-    const doc = await modelMap[kind].findOne({ slug, status: "published" }).lean();
-    return doc ? normalize(doc as Record<string, unknown>) : null;
+    const doc = await modelMap[kind].findOne({ slug, status: "published", deletedAt: null }).lean();
+    return doc ? normalizeContentItem(doc as Record<string, unknown>) : null;
   } catch { return samples[kind].find((item) => item.slug === slug) || null; }
 }
 
