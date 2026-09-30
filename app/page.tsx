@@ -1,69 +1,28 @@
 import Image from "next/image";
+import Link from "next/link";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { ContentCard } from "@/components/ui/content-card";
+import { getItems, getSettings } from "@/lib/data";
+import { images } from "@/lib/sample-data";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+export const revalidate = 300;
+
+export default async function Home() {
+  const [projects, photography, places, posts, settings] = await Promise.all([getItems("projects",{featured:true,limit:2}),getItems("photography",{featured:true,limit:4}),getItems("places",{featured:true,limit:3}),getItems("posts",{limit:3}),getSettings()]);
+  const jsonLd = { "@context":"https://schema.org", "@graph":[{ "@type":"Person", "@id":"https://nahidestes.com/#person", name:"Nahid Estes", url:"https://nahidestes.com", jobTitle:"Developer, Photographer and Visual Storyteller" },{ "@type":"WebSite", "@id":"https://nahidestes.com/#website", url:"https://nahidestes.com", name:"Nahid Estes", publisher:{ "@id":"https://nahidestes.com/#person" }, potentialAction:{ "@type":"SearchAction", target:"https://nahidestes.com/search?q={search_term_string}", "query-input":"required name=search_term_string" } }] };
+  return <><Header/><main>
+    <section className="hero"><Image className="hero-image" src={images.hero} alt="Clifftop Mediterranean terrace overlooking the sea" fill priority sizes="100vw"/><div className="container hero-content"><div className="eyebrow">Welcome to my world</div><h1 className="display">Developer, Photographer<br/>&amp; Visual Storyteller</h1><p>Building digital experiences. Documenting places, food &amp; culture.</p><div className="hero-buttons"><Link className="button light" href="#work">View My Work&nbsp; →</Link><Link className="button ghost" href="/journal">Explore Journal</Link></div></div><div className="hero-notes"><div className="container dots"><span className="active">01</span><span>02</span><span>03</span></div></div></section>
+
+    <section id="work" className="editorial-section"><div className="container split-intro"><div className="intro-copy"><div className="eyebrow">Selected Work</div><h2 className="display section-title">Digital Projects<br/>with Real Purpose</h2><div className="gold-line"/><p className="section-copy">From restaurant platforms to productivity tools, I build digital experiences that solve real problems and make everyday life better.</p><Link className="text-link" href="/work">View All Projects</Link></div><div className="project-grid">{projects.map((item,index)=><ContentCard key={item.slug} item={item} basePath="/work" index={index}/>)}</div></div></section>
+
+    <section className="editorial-section dark-section"><div className="container split-intro"><div className="intro-copy"><div className="eyebrow">Photography Journal</div><h2 className="display section-title">Moments From<br/>Around the World</h2><div className="gold-line"/><p className="section-copy">Food, places, architecture and everyday moments that tell a bigger story.</p><Link className="text-link" href="/photography">View Full Gallery</Link></div><div className="photo-grid">{photography.map((item)=><Link key={item.slug} className="photo-card" href={`/photography/${item.slug}`}><Image src={item.featuredImage} alt={item.imageAlt} fill sizes="(max-width:700px) 50vw, 25vw"/><span>{item.category}</span></Link>)}</div></div></section>
+
+    <section className="editorial-section"><div className="container split-intro"><div className="intro-copy"><div className="eyebrow">Places &amp; Culture</div><h2 className="display section-title">Stories of People,<br/>Places and Traditions</h2><div className="gold-line"/><p className="section-copy">Exploring cultures, food, history and the little details that make each place unique.</p><Link className="text-link" href="/places-culture">Explore All Stories</Link></div><div className="story-grid">{places.map((item)=><ContentCard key={item.slug} item={item} basePath="/places-culture"/>)}</div></div></section>
+
+    <section className="editorial-section" style={{background:"var(--paper)"}}><div className="container"><div className="journal-heading"><div><div className="eyebrow">Latest Stories</div><h2 className="display section-title">On the Journal</h2></div><Link className="text-link" href="/journal">View All Posts</Link></div><div className="journal-grid">{posts.map((item)=><article key={item.slug} className="journal-card"><Link className="thumb" href={`/journal/${item.slug}`}><Image src={item.featuredImage} alt={item.imageAlt} fill sizes="140px"/></Link><div><div className="meta">{new Intl.DateTimeFormat("en",{month:"short",day:"2-digit",year:"numeric"}).format(new Date(item.publishedAt))}</div><h3><Link href={`/journal/${item.slug}`}>{item.title}</Link></h3><p>{item.excerpt}</p><Link className="text-link" href={`/journal/${item.slug}`}>Read More</Link></div></article>)}</div></div></section>
+
+    <section className="about-section"><div className="about-copy"><div className="eyebrow">About Nahid</div><h2 className="display section-title">Code. Culture.<br/>Camera. Creativity.</h2><div className="gold-line"/><p className="section-copy">{settings.biography}</p><Link className="button dark" href="/about">More About Me&nbsp; →</Link></div><div className="about-image"><Image src={settings.profileImage||images.workspace} alt="Creative workspace with a camera, notebook and laptop" fill sizes="(max-width:1050px) 100vw, 56vw"/><aside className="quote-card"><div className="quote-mark">“</div><p>Better websites.<br/>Richer stories.<br/>A more curious world.</p></aside></div></section>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(jsonLd)}}/>
+  </main><Footer/></>;
 }

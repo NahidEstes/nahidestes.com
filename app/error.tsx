@@ -1,0 +1,1 @@
+"use client";export default function Error({reset}:{reset:()=>void}){return <div className="route-state route-error"><div className="route-state-inner"><div className="eyebrow">Something went wrong</div><h1 className="display section-title">The story paused unexpectedly.</h1><button className="button dark" onClick={reset}>Try Again →</button></div></div>}

@@ -1,0 +1,3 @@
+import { redirect } from "next/navigation";import { getServerSession } from "next-auth";import { authOptions } from "@/lib/auth";import { LoginForm } from "@/components/admin/login-form";import {ThemeToggle} from "@/components/theme/theme-toggle";
+export const metadata={title:"Admin Login",robots:{index:false,follow:false}};
+export default async function Page(){if(await getServerSession(authOptions))redirect("/admin");return <main className="admin-login"><ThemeToggle className="login-theme-toggle"/><section className="login-card"><div className="eyebrow">Nahid Estes</div><h1>Content Studio</h1><p className="section-copy">Sign in to manage projects, photographs, stories and site messages.</p><LoginForm/></section></main>}

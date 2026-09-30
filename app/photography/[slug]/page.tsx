@@ -1,0 +1,3 @@
+import type { Metadata } from "next"; import { DetailPage } from "@/components/sections/detail-page"; import { getItem } from "@/lib/data";
+export async function generateMetadata({params}:{params:Promise<{slug:string}>}):Promise<Metadata>{const {slug}=await params;const item=await getItem("photography",slug);return item?{title:item.seoTitle||item.title,description:item.seoDescription||item.excerpt,alternates:{canonical:`/photography/${slug}`},openGraph:{title:item.title,description:item.excerpt,images:[item.featuredImage]}}:{};}
+export default async function Page({params}:{params:Promise<{slug:string}>}){return <DetailPage kind="photography" slug={(await params).slug}/>;}

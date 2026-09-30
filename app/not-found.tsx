@@ -1,0 +1,2 @@
+import Link from "next/link"; import { PublicShell } from "@/components/layout/public-shell";
+export default function NotFound(){return <PublicShell><section className="inner-hero" style={{minHeight:"70vh",display:"grid",placeItems:"center"}}><div className="container"><div className="eyebrow">404</div><h1 className="display">This path wandered off.</h1><p>The page may have moved, or the story is still being written.</p><Link className="button light" href="/">Return Home →</Link></div></section></PublicShell>}
