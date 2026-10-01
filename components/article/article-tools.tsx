@@ -1,9 +1,12 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { Bookmark, Check, Copy, Link2, Share2 } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 export type TocItem = { id: string; number: string; title: string };
+export type RelatedStory = { title: string; href: string; image: string; imageAlt: string; label: string };
 
 export function ReadingProgress() {
   const [progress, setProgress] = useState(0);
@@ -33,7 +36,7 @@ export function HeroArticleActions({ articleId, title, url }: { articleId: strin
   return <div className="hero-article-actions"><button type="button" onClick={bookmark} aria-pressed={saved}><Bookmark size={17} fill={saved ? "currentColor" : "none"}/>{saved ? "Saved" : "Save"}</button><button type="button" onClick={share}><Share2 size={17}/>Share</button><span className="sr-only" role="status">{message}</span></div>;
 }
 
-export function ArticleSidebarTools({ toc, tags, basePath, url, title }: { toc: TocItem[]; tags: string[]; basePath: string; url: string; title: string }) {
+export function ArticleSidebarTools({ toc, relatedStories, tags, basePath, url, title }: { toc: TocItem[]; relatedStories: RelatedStory[]; tags: string[]; basePath: string; url: string; title: string }) {
   const [active, setActive] = useState(toc[0]?.id || ""); const [copied, setCopied] = useState(false);
   useEffect(() => {
     const observer = new IntersectionObserver(entries => { const visible = entries.filter(entry => entry.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0]; if (visible) setActive(visible.target.id); }, { rootMargin: "-90px 0px -68% 0px" });
@@ -44,6 +47,7 @@ export function ArticleSidebarTools({ toc, tags, basePath, url, title }: { toc: 
   const tocList = <ol>{toc.map(item => <li key={item.id} className={active === item.id ? "active" : ""}><a href={`#${item.id}`}><span>{item.number}</span>{item.title}</a></li>)}</ol>;
   return <>
     <section className="article-side-card toc-card"><h2>Table of contents</h2><div className="desktop-toc">{tocList}</div><details className="mobile-toc"><summary>Explore this article</summary>{tocList}</details></section>
+    {relatedStories.length > 0 && <section className="article-side-card related-stories-card"><h2>Related Stories</h2><div className="sidebar-related-list">{relatedStories.map(story => <Link key={story.href} href={story.href} className="sidebar-related-story"><span className="sidebar-related-thumb"><Image src={story.image} alt={story.imageAlt} fill sizes="96px"/></span><span><small>{story.label}</small><strong>{story.title}</strong></span></Link>)}</div></section>}
     <section className="article-side-card"><h2>Tags</h2><div className="article-tags">{tags.map(tag => <a key={tag} href={`${basePath}?tag=${encodeURIComponent(tag)}`}>{tag}</a>)}</div></section>
     <section className="article-side-card"><h2>Share this article</h2><div className="article-share-icons"><a aria-label="Share on X" href={`https://twitter.com/intent/tweet?url=${encoded.url}&text=${encoded.title}`}>X</a><a aria-label="Share on Facebook" href={`https://www.facebook.com/sharer/sharer.php?u=${encoded.url}`}>f</a><a aria-label="Share on Pinterest" href={`https://pinterest.com/pin/create/button/?url=${encoded.url}&description=${encoded.title}`}>P</a><a aria-label="Share on LinkedIn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encoded.url}`}>in</a><button type="button" aria-label="Copy article link" onClick={copy}>{copied ? <Check size={17}/> : <Link2 size={17}/>}</button></div><div className="copy-toast" role="status" aria-live="polite">{copied ? <><Copy size={14}/> Link copied</> : ""}</div></section>
   </>;
