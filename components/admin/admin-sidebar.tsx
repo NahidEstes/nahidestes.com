@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { BookOpen, Camera, FolderKanban, LayoutDashboard, LogOut, Mail, Map, Settings, Tags, Trash2, Users } from "lucide-react";
+import { BookOpen, CalendarClock, Camera, FolderKanban, LayoutDashboard, LogOut, Mail, Map, Settings, Tags, Trash2, Users } from "lucide-react";
 import type { AdminRole } from "./admin-types";
 
 const contentNavigation = [
@@ -11,6 +11,7 @@ const contentNavigation = [
   ["Projects", "/admin/projects", "projects", FolderKanban],
   ["Photography", "/admin/photography", "photography", Camera],
   ["Places & Culture", "/admin/places", "places", Map],
+  ["Scheduled", "/admin/scheduled", "scheduled", CalendarClock],
 ] as const;
 const adminNavigation = [
   ["Categories", "/admin/categories", "categories", Tags],

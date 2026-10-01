@@ -89,6 +89,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ collect
   if (!await connectDB()) return apiError(503, "DATABASE_UNAVAILABLE", "MongoDB is not configured or unavailable.");
 
   if (isContentCollection(context.collection)) {
+    if (auth.actor.role !== "admin") return apiError(403, "FORBIDDEN", "Only administrators can move content to Trash.");
     const updated = await context.model.findOneAndUpdate({ _id: context.id, deletedAt: null }, { $set: { deletedAt: new Date() } }, { returnDocument: "after" }).lean();
     if (!updated) {
       const exists = await context.model.exists({ _id: context.id });

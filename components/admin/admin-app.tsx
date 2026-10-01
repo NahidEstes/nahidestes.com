@@ -7,6 +7,7 @@ import { CategoryPanel } from "./category-panel";
 import { ContentForm } from "./content-form";
 import { ContentList } from "./content-list";
 import { SettingsPanel } from "./settings-panel";
+import { ScheduledContent } from "./scheduled-content";
 import { TrashView } from "./trash-view";
 import { editableCollections, type AdminRole } from "./admin-types";
 import type { ContentCollection } from "@/types/content";
@@ -17,6 +18,7 @@ export function AdminApp({ segments, role }: { segments: string[]; role: AdminRo
   const mode = detail === "new" ? "new" : segments[2] === "edit" ? "edit" : "list";
   let content: React.ReactNode;
   if (section === "dashboard") content = <AdminDashboard role={role}/>;
+  else if (section === "scheduled") content = <ScheduledContent/>;
   else if (section === "trash" && role === "admin") content = <TrashView/>;
   else if (section === "settings" && role === "admin") content = <SettingsPanel/>;
   else if (section === "categories" && role === "admin") content = <CategoryPanel/>;

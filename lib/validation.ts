@@ -75,8 +75,8 @@ export const postCreateSchema = z.object(articleShape).strict();
 export const postPatchSchema = z.object(articleShape).partial().strict();
 export const placeCreateSchema = z.object({ ...articleShape, country: z.string().trim().max(120).optional(), location: z.string().trim().max(180).optional() }).strict();
 export const placePatchSchema = z.object({ ...articleShape, country: z.string().trim().max(120).optional(), location: z.string().trim().max(180).optional() }).partial().strict();
-export const projectCreateSchema = z.object({ ...commonContentShape, technologies: z.array(plain(1, 80)).max(40).optional(), projectUrl: optionalHttpsUrl, repositoryUrl: optionalHttpsUrl, year: z.number().int().min(1900).max(2200).optional(), gallery: z.array(articleImageSchema).max(50).optional() }).strict();
-export const projectPatchSchema = z.object({ ...commonContentShape, technologies: z.array(plain(1, 80)).max(40).optional(), projectUrl: optionalHttpsUrl, repositoryUrl: optionalHttpsUrl, year: z.number().int().min(1900).max(2200).optional(), gallery: z.array(articleImageSchema).max(50).optional() }).partial().strict();
+export const projectCreateSchema = z.object({ ...commonContentShape, technologies: z.array(plain(1, 80)).max(40).optional(), projectUrl: optionalHttpsUrl, repositoryUrl: optionalHttpsUrl, year: z.number().int().min(1900).max(2200).optional(), order: z.number().int().min(0).max(100000).optional(), gallery: z.array(articleImageSchema).max(50).optional() }).strict();
+export const projectPatchSchema = z.object({ ...commonContentShape, technologies: z.array(plain(1, 80)).max(40).optional(), projectUrl: optionalHttpsUrl, repositoryUrl: optionalHttpsUrl, year: z.number().int().min(1900).max(2200).optional(), order: z.number().int().min(0).max(100000).optional(), gallery: z.array(articleImageSchema).max(50).optional() }).partial().strict();
 export const photographyCreateSchema = z.object({ ...commonContentShape, location: z.string().trim().max(180).optional(), capturedAt: dateValue.optional(), gallery: z.array(articleImageSchema).max(100).optional() }).strict();
 export const photographyPatchSchema = z.object({ ...commonContentShape, location: z.string().trim().max(180).optional(), capturedAt: dateValue.optional(), gallery: z.array(articleImageSchema).max(100).optional() }).partial().strict();
 export const categoryCreateSchema = z.object({ name: plain(2, 80), slug, type: z.enum(["post", "project", "photography", "place"]) }).strict();
@@ -86,6 +86,15 @@ export const subscriberPatchSchema = subscriberCreateSchema.partial().strict();
 export const messagePatchSchema = z.object({ status: z.enum(["unread", "read", "archived"]) }).partial().strict();
 export const settingsCreateSchema = z.object({ siteTitle: plain(2, 100), tagline: z.string().trim().max(180), biography: plain(20, 3000), profileImage: httpsUrl, email: z.email().max(160), socialLinks: z.record(z.string(), z.union([httpsUrl, z.literal("")])) }).strict();
 export const settingsPatchSchema = settingsCreateSchema.partial().strict();
+
+const bulkIds = z.array(z.string().regex(/^[a-f\d]{24}$/i, "Invalid content ID.")).min(1).max(100);
+const bulkTags = z.array(plain(1, 80)).min(1).max(40);
+export const contentBulkSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.enum(["publish", "draft", "feature", "unfeature", "trash", "restore", "delete"]), ids: bulkIds }).strict(),
+  z.object({ action: z.literal("schedule"), ids: bulkIds, scheduledAt: z.string().datetime() }).strict(),
+  z.object({ action: z.literal("category"), ids: bulkIds, category: plain(2, 80) }).strict(),
+  z.object({ action: z.enum(["addTags", "removeTags"]), ids: bulkIds, tags: bulkTags }).strict(),
+]);
 
 export function schemaForCollection(collection: AdminCollection, partial: boolean) {
   const schemas = {

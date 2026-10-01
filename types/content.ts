@@ -72,6 +72,7 @@ export interface ContentItem {
   projectUrl?: string;
   repositoryUrl?: string;
   year?: number;
+  order?: number;
   deletedAt?: string | null;
   version?: number;
 }
@@ -86,9 +87,80 @@ export interface AdminContentRow {
   slug: string;
   status: string;
   isFeatured?: boolean;
+  featuredImage?: string;
+  imageAlt?: string;
+  excerpt?: string;
+  category?: string;
+  tags?: string[];
+  publishedAt?: string | null;
+  scheduledAt?: string | null;
+  country?: string;
+  location?: string;
+  technologies?: string[];
+  year?: number;
+  order?: number;
+  capturedAt?: string | null;
+  authorName?: string;
+  version?: number;
   updatedAt?: string;
   createdAt?: string;
   deletedAt?: string | null;
+}
+
+export type ContentListStatus = "all" | "published" | "draft" | "scheduled" | "trash";
+
+export interface ContentPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalItems: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface ContentStatusCounts {
+  all: number;
+  published: number;
+  draft: number;
+  scheduled: number;
+  trash: number;
+  featured: number;
+}
+
+export interface ContentFilterOptions {
+  categories: string[];
+  tags: string[];
+  countries?: string[];
+  locations?: string[];
+  technologies?: string[];
+  years?: number[];
+  authors?: string[];
+}
+
+export interface PaginatedContentResponse {
+  items: AdminContentRow[];
+  pagination: ContentPagination;
+  statusCounts: ContentStatusCounts;
+  filterOptions: ContentFilterOptions;
+}
+
+export type ContentBulkAction =
+  | "publish"
+  | "draft"
+  | "schedule"
+  | "feature"
+  | "unfeature"
+  | "trash"
+  | "restore"
+  | "delete"
+  | "category"
+  | "addTags"
+  | "removeTags";
+
+export interface ContentBulkResult {
+  affected: number;
+  failed: Array<{ id: string; title?: string; message: string }>;
 }
 
 export interface SiteSettingsData {

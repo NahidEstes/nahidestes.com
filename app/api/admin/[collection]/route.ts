@@ -1,9 +1,13 @@
 import { connectDB } from "@/lib/db";
 import {
-  apiError, apiSuccess, collectionLabel, getAdminModel, isAdminCollection, isContentCollection,
+  apiError, apiSuccess, getAdminModel, isAdminCollection, isContentCollection,
   isDuplicateKeyError, requireAdminActor, toFieldErrors,
 } from "@/lib/admin/api";
 import { sanitizeContentPayload, schemaForCollection, validateContentImageFields } from "@/lib/validation";
+import {
+  buildContentFilter, buildContentSort, getContentFilterOptions, getContentStatusCounts,
+  parseContentQuery, toAdminContentRow,
+} from "@/lib/admin/content-query";
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -15,25 +19,41 @@ export async function GET(request: Request, { params }: { params: Promise<{ coll
   const { collection } = await params;
   if (!isAdminCollection(collection)) return apiError(404, "UNKNOWN_COLLECTION", "Unknown collection.");
   if (auth.actor.role !== "admin" && !isContentCollection(collection)) return apiError(403, "FORBIDDEN", "Editors can only access content collections.");
-  if (!await connectDB()) return apiError(503, "DATABASE_UNAVAILABLE", "MongoDB is not configured or unavailable.");
 
   const model = getAdminModel(collection);
   const url = new URL(request.url);
+  if (isContentCollection(collection)) {
+    const parsed = parseContentQuery(url.searchParams);
+    if (!parsed.ok) return apiError(400, "INVALID_QUERY", parsed.message);
+    if (parsed.data.status === "trash" && auth.actor.role !== "admin") return apiError(403, "FORBIDDEN", "Only administrators can view Trash.");
+    if (!await connectDB()) return apiError(503, "DATABASE_UNAVAILABLE", "MongoDB is not configured or unavailable.");
+    const filter = buildContentFilter(collection, parsed.data);
+    const skip = (parsed.data.page - 1) * parsed.data.limit;
+    const [docs, total, statusCounts, filterOptions] = await Promise.all([
+      model.find(filter).select("title slug status isFeatured featuredImage imageAlt excerpt category tags publishedAt scheduledAt country location technologies year order capturedAt authorName version updatedAt createdAt deletedAt").sort(buildContentSort(parsed.data)).skip(skip).limit(parsed.data.limit).lean(),
+      model.countDocuments(filter),
+      getContentStatusCounts(collection, parsed.data),
+      getContentFilterOptions(collection),
+    ]);
+    return apiSuccess({
+      items: docs.map((doc) => toAdminContentRow(collection, doc)),
+      pagination: { page: parsed.data.page, limit: parsed.data.limit, total, totalItems: total, totalPages: Math.max(1, Math.ceil(total / parsed.data.limit)), hasPreviousPage: parsed.data.page > 1, hasNextPage: parsed.data.page * parsed.data.limit < total },
+      statusCounts,
+      filterOptions,
+    });
+  }
+  if (!await connectDB()) return apiError(503, "DATABASE_UNAVAILABLE", "MongoDB is not configured or unavailable.");
   const query = url.searchParams.get("q")?.trim();
   const trash = url.searchParams.get("trash") === "true";
-  if (trash && (!isContentCollection(collection) || auth.actor.role !== "admin")) return apiError(403, "FORBIDDEN", "Only administrators can view Trash.");
+  if (trash) return apiError(400, "INVALID_QUERY", "Trash is only available for content collections.");
 
   const filter: Record<string, unknown> = {};
-  if (isContentCollection(collection)) filter.deletedAt = trash ? { $ne: null } : null;
   if (query) {
     const field = collection === "subscribers" ? "email" : collection === "messages" ? "subject" : collection === "categories" ? "name" : "title";
     filter[field] = { $regex: escapeRegex(query), $options: "i" };
   }
   const docs = await model.find(filter).sort({ updatedAt: -1, createdAt: -1 }).limit(100).lean();
-  const data = isContentCollection(collection)
-    ? docs.map((doc) => ({ ...doc, collection, contentType: collectionLabel(collection) }))
-    : docs;
-  return apiSuccess(data);
+  return apiSuccess(docs);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ collection: string }> }) {

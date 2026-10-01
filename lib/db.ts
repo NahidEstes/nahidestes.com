@@ -9,7 +9,13 @@ export async function connectDB() {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
   if (cache.conn) return cache.conn;
-  cache.promise ??= mongoose.connect(uri, { bufferCommands: false });
-  cache.conn = await cache.promise;
-  return cache.conn;
+  try {
+    cache.promise ??= mongoose.connect(uri, { bufferCommands: false });
+    cache.conn = await cache.promise;
+    return cache.conn;
+  } catch {
+    cache.conn = null;
+    cache.promise = null;
+    return null;
+  }
 }
