@@ -65,16 +65,18 @@ const commonContentShape = {
 
 const articleShape = {
   ...commonContentShape,
+  commentsEnabled: z.boolean().default(true),
   readingTime: z.number().int().positive().max(1000).optional(),
   authorName: z.string().trim().max(120).optional(), authorTitle: z.string().trim().max(180).optional(),
   authorBio: z.string().trim().max(1200).optional(), authorImage: optionalHttpsUrl, authorImageAlt: z.string().trim().max(220).optional(), authorImageCaption: z.string().trim().max(500).optional(), authorImageWidth: z.number().int().positive().max(10000).optional(), authorImageHeight: z.number().int().positive().max(10000).optional(), authorImageDecorative: z.boolean().optional(),
   sections: sectionsSchema.optional(), gallery: z.array(articleImageSchema).max(50).optional(),
 };
+const articlePatchShape = { ...articleShape, commentsEnabled: z.boolean().optional() };
 
 export const postCreateSchema = z.object(articleShape).strict();
-export const postPatchSchema = z.object(articleShape).partial().strict();
+export const postPatchSchema = z.object(articlePatchShape).partial().strict();
 export const placeCreateSchema = z.object({ ...articleShape, country: z.string().trim().max(120).optional(), location: z.string().trim().max(180).optional() }).strict();
-export const placePatchSchema = z.object({ ...articleShape, country: z.string().trim().max(120).optional(), location: z.string().trim().max(180).optional() }).partial().strict();
+export const placePatchSchema = z.object({ ...articlePatchShape, country: z.string().trim().max(120).optional(), location: z.string().trim().max(180).optional() }).partial().strict();
 export const projectCreateSchema = z.object({ ...commonContentShape, technologies: z.array(plain(1, 80)).max(40).optional(), projectUrl: optionalHttpsUrl, repositoryUrl: optionalHttpsUrl, year: z.number().int().min(1900).max(2200).optional(), order: z.number().int().min(0).max(100000).optional(), gallery: z.array(articleImageSchema).max(50).optional() }).strict();
 export const projectPatchSchema = z.object({ ...commonContentShape, technologies: z.array(plain(1, 80)).max(40).optional(), projectUrl: optionalHttpsUrl, repositoryUrl: optionalHttpsUrl, year: z.number().int().min(1900).max(2200).optional(), order: z.number().int().min(0).max(100000).optional(), gallery: z.array(articleImageSchema).max(50).optional() }).partial().strict();
 export const photographyCreateSchema = z.object({ ...commonContentShape, location: z.string().trim().max(180).optional(), capturedAt: dateValue.optional(), gallery: z.array(articleImageSchema).max(100).optional() }).strict();

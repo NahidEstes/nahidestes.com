@@ -47,6 +47,7 @@ export interface ContentItem {
   status: "draft" | "published" | "scheduled";
   publishedAt: string;
   isFeatured: boolean;
+  commentsEnabled?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   gallery?: ArticleImage[];

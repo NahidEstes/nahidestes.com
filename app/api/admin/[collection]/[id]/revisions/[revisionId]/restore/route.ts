@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
-import { apiError, apiSuccess, getAdminModel, isValidObjectId, requireAdminActor } from "@/lib/admin/api";
+import { revalidatePath } from "next/cache";
+import { apiError, apiSuccess, getAdminModel, isValidObjectId, publicPath, requireAdminActor } from "@/lib/admin/api";
 import { createArticleRevision } from "@/lib/admin/revisions";
 import { sanitizeContentPayload, schemaForCollection } from "@/lib/validation";
 import { ArticleRevision } from "@/models/ArticleRevision";
@@ -26,5 +27,6 @@ export async function POST(_: Request, { params }: { params: Promise<{ collectio
   delete snapshot.version;
   const restored = await model.findByIdAndUpdate(id, { $set: snapshot, $inc: { version: 1 } }, { returnDocument: "after", runValidators: true }).lean();
   if (!restored) return apiError(404, "NOT_FOUND", "The requested article does not exist.");
+  if (restored.slug) revalidatePath(publicPath(collection, String(restored.slug)));
   return apiSuccess(restored);
 }

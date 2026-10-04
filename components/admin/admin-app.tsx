@@ -6,6 +6,7 @@ import { AuxiliaryList } from "./auxiliary-list";
 import { CategoryPanel } from "./category-panel";
 import { ContentForm } from "./content-form";
 import { ContentList } from "./content-list";
+import { CommentsManager } from "./comments-manager";
 import { SettingsPanel } from "./settings-panel";
 import { ScheduledContent } from "./scheduled-content";
 import { TrashView } from "./trash-view";
@@ -19,6 +20,7 @@ export function AdminApp({ segments, role }: { segments: string[]; role: AdminRo
   let content: React.ReactNode;
   if (section === "dashboard") content = <AdminDashboard role={role}/>;
   else if (section === "scheduled") content = <ScheduledContent/>;
+  else if (section === "comments") content = <CommentsManager role={role}/>;
   else if (section === "trash" && role === "admin") content = <TrashView/>;
   else if (section === "settings" && role === "admin") content = <SettingsPanel/>;
   else if (section === "categories" && role === "admin") content = <CategoryPanel/>;

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import sanitizeHtml from "sanitize-html";
 import { Clock3 } from "lucide-react";
 import { PublicShell } from "@/components/layout/public-shell";
+import { CommentSection } from "@/components/article/comment-section";
 import {
   ArticleSections,
   prepareArticle,
@@ -18,6 +19,7 @@ import {
   LightboxImage,
 } from "@/components/ui/image-lightbox";
 import { getItem, getItems, getSettings } from "@/lib/data";
+import { getApprovedComments } from "@/lib/comments";
 import type { ContentItem } from "@/types/content";
 
 const paths: Record<"posts" | "places", string> = {
@@ -141,6 +143,8 @@ export async function ArticleDetailPage({
     bio: item.authorBio || settings.biography,
     image: item.authorImage || settings.profileImage,
   };
+  const postType = kind === "posts" ? "post" : "place";
+  const commentData = !previewItem && item._id ? await getApprovedComments(item._id, postType) : { comments: [], count: 0 };
   const readingTime = calculateReadingTime(item);
   const breadcrumbSchema = {
     "@type": "BreadcrumbList",
@@ -323,6 +327,7 @@ export async function ArticleDetailPage({
               />
             </aside>
           </div>
+          {!previewItem && item._id && <div className="container"><CommentSection postId={item._id} postType={postType} commentsEnabled={item.commentsEnabled !== false} initialComments={commentData.comments} initialCount={commentData.count}/></div>}
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}

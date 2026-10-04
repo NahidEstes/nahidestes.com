@@ -1,7 +1,8 @@
 import { connectDB } from "@/lib/db";
+import { revalidatePath } from "next/cache";
 import {
   apiError, apiSuccess, getAdminModel, isAdminCollection, isContentCollection, isDuplicateKeyError,
-  isValidObjectId, requireAdminActor, toFieldErrors,
+  isValidObjectId, publicPath, requireAdminActor, toFieldErrors,
 } from "@/lib/admin/api";
 import { createArticleRevision } from "@/lib/admin/revisions";
 import { sanitizeContentPayload, schemaForCollection, validateContentImageFields } from "@/lib/validation";
@@ -68,6 +69,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
       { returnDocument: "after", runValidators: true },
     ).lean();
     if (!updated) return apiError(409, "EDIT_CONFLICT", "This record was updated elsewhere. Reload before saving again.");
+    if ((context.collection === "posts" || context.collection === "places") && updated.slug) revalidatePath(publicPath(context.collection, String(updated.slug)));
     return apiSuccess(updated);
   }
 

@@ -3,7 +3,7 @@ import type { ContentCollection } from "@/lib/admin/api";
 
 const revisionFields = [
   "title", "slug", "excerpt", "content", "featuredImage", "imageAlt", "category", "tags",
-  "status", "publishedAt", "scheduledAt", "isFeatured", "seoTitle", "seoDescription", "ogImage",
+  "status", "publishedAt", "scheduledAt", "isFeatured", "commentsEnabled", "seoTitle", "seoDescription", "ogImage",
   "readingTime", "authorName", "authorTitle", "authorBio", "authorImage", "sections", "gallery",
   "authorImageAlt", "authorImageCaption", "authorImageWidth", "authorImageHeight", "authorImageDecorative",
   "featuredImageCaption", "featuredImageWidth", "featuredImageHeight", "featuredImageDecorative",
