@@ -66,7 +66,7 @@ const commonContentShape = {
 const articleShape = {
   ...commonContentShape,
   commentsEnabled: z.boolean().default(true),
-  readingTime: z.number().int().positive().max(1000).optional(),
+  readingTime: z.number().int().positive().max(1000).nullable().optional(),
   authorName: z.string().trim().max(120).optional(), authorTitle: z.string().trim().max(180).optional(),
   authorBio: z.string().trim().max(1200).optional(), authorImage: optionalHttpsUrl, authorImageAlt: z.string().trim().max(220).optional(), authorImageCaption: z.string().trim().max(500).optional(), authorImageWidth: z.number().int().positive().max(10000).optional(), authorImageHeight: z.number().int().positive().max(10000).optional(), authorImageDecorative: z.boolean().optional(),
   sections: sectionsSchema.optional(), gallery: z.array(articleImageSchema).max(50).optional(),

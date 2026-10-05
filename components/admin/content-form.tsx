@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState } from "react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import type { ArticleImage, ContentCollection } from "@/types/content";
 import { ArticleBuilder, normalizeBuilderSections, type BuilderSection } from "./article-builder/article-builder";
 import { ConfirmationDialog } from "./confirmation-dialog";
-import { ImageUrlField } from "./image-url-field";
+import { ImageThumbnail, ImageUrlField } from "./image-url-field";
+import { ArticleSettingsDrawer } from "./article-settings-drawer";
+import { SettingsAccordion } from "./settings-accordion";
+import { hasCustomAuthor, normalizeEditorFieldErrors, settingsPanelForField, toLocalDateTimeInput, type EditorSettingsPanel } from "@/lib/admin/editor-settings";
 import { PublishPanel } from "./publish-panel";
 import { RevisionHistory } from "./revision-history";
 import { RichTextEditor } from "./rich-text-editor";
@@ -34,13 +38,27 @@ const defaults: FormValues = {
 
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const toDateInput = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 10) : today();
-const toDateTimeInput = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 16) : "";
 const numberOrUndefined = (value: string) => value ? Number(value) : undefined;
+const featuredFields = { url: "featuredImage", alt: "imageAlt", caption: "featuredImageCaption", width: "featuredImageWidth", height: "featuredImageHeight", decorative: "featuredImageDecorative" };
+const authorFields = { url: "authorImage", alt: "authorImageAlt", caption: "authorImageCaption", width: "authorImageWidth", height: "authorImageHeight", decorative: "authorImageDecorative" };
+const socialFields = { url: "ogImage", alt: "ogImageAlt", caption: "ogImageCaption", width: "ogImageWidth", height: "ogImageHeight", decorative: "ogImageDecorative" };
 
-export function ContentForm({ collection, id, role }: { collection: ContentCollection; id?: string; role: AdminRole }) {
+export type DefaultAuthor = { name: string; title: string; biography: string; image: string };
+
+export function ContentForm({ collection, id, role, defaultAuthor }: { collection: ContentCollection; id?: string; role: AdminRole; defaultAuthor: DefaultAuthor }) {
   const router = useRouter();
   const { notify } = useToast();
-  const { register, getValues, reset, setValue, watch } = useForm<FormValues>({ defaultValues: defaults });
+  const { register, getValues, reset, setValue, watch } = useForm<FormValues>({ defaultValues: defaults, shouldUnregister: false });
+  const formRef = useRef<HTMLFormElement>(null);
+  const settingsId = useId();
+  const settingsInitialized = useRef(false);
+  const silentChange = useRef(false);
+  const [openPanel, setOpenPanel] = useState<EditorSettingsPanel | null>(id ? null : "featured");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [publicationOpen, setPublicationOpen] = useState(false);
+  const [customAuthor, setCustomAuthor] = useState(false);
+  const [customSocialImage, setCustomSocialImage] = useState(false);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const [sections, setSections] = useState<BuilderSection[]>([]);
   const [gallery, setGallery] = useState<ArticleImage[]>([]);
   const [version, setVersion] = useState(0);
@@ -55,29 +73,36 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
   const changeVersion = useRef(0);
   const savingRef = useRef(false);
   const status = watch("status");
-  const scheduledAt = watch("scheduledAt");
   const featured = watch("isFeatured");
   const slug = watch("slug");
 
   const markDirty = useCallback(() => {
-    if (!loaded) return;
+    if (!loaded || silentChange.current) return;
     changeVersion.current += 1;
     setSaveState("dirty");
   }, [loaded]);
 
   const hydrate = useCallback((item: Record<string, unknown>) => {
+    silentChange.current = true;
     reset({
       ...defaults,
       ...item,
       commentsEnabled: item.commentsEnabled !== false,
       tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
       technologies: Array.isArray(item.technologies) ? item.technologies.join(", ") : "",
-      publishedAt: toDateInput(item.publishedAt), scheduledAt: toDateTimeInput(item.scheduledAt),
+      publishedAt: toDateInput(item.publishedAt), scheduledAt: toLocalDateTimeInput(item.scheduledAt),
       readingTime: item.readingTime ? String(item.readingTime) : "", year: item.year ? String(item.year) : "",
       featuredImageWidth: item.featuredImageWidth ? String(item.featuredImageWidth) : "", featuredImageHeight: item.featuredImageHeight ? String(item.featuredImageHeight) : "",
       authorImageWidth: item.authorImageWidth ? String(item.authorImageWidth) : "", authorImageHeight: item.authorImageHeight ? String(item.authorImageHeight) : "",
       ogImageWidth: item.ogImageWidth ? String(item.ogImageWidth) : "", ogImageHeight: item.ogImageHeight ? String(item.ogImageHeight) : "",
     } as FormValues);
+    silentChange.current = false;
+    setCustomAuthor(hasCustomAuthor(item));
+    setCustomSocialImage(Boolean(item.ogImage));
+    if (!settingsInitialized.current) {
+      setOpenPanel(item.featuredImage ? null : "featured");
+      settingsInitialized.current = true;
+    }
     setSections(normalizeBuilderSections(item.sections));
     setGallery(Array.isArray(item.gallery) ? item.gallery as ArticleImage[] : []);
     setVersion(Number(item.version || 0));
@@ -106,6 +131,29 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [saveState]);
 
+  const revealErrors = useCallback((errors: Record<string, string[]>) => {
+    const fields = Object.keys(errors);
+    const first = fields[0];
+    if (!first) return;
+    const panel = settingsPanelForField(first);
+    if (panel) {
+      setOpenPanel(panel);
+      if (panel === "author" && first.startsWith("author")) setCustomAuthor(true);
+      if (panel === "seo" && first.startsWith("ogImage")) setCustomSocialImage(true);
+      if (window.matchMedia("(max-width: 850px)").matches) setDrawerOpen(true);
+    } else {
+      if (first === "status" || first === "scheduledAt" || first === "publishedAt") { setPublicationOpen(true); if (window.matchMedia("(max-width: 850px)").matches) setDrawerOpen(true); }
+      else setDrawerOpen(false);
+    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const form = formRef.current;
+      const field = form?.querySelector<HTMLElement>(`[data-error-field="${CSS.escape(first)}"], [name="${CSS.escape(first)}"]`) || form?.querySelector<HTMLElement>('[aria-invalid="true"]');
+      const target = field?.matches("input,textarea,select,button,[contenteditable]") ? field : field?.querySelector<HTMLElement>('input:not(:disabled),textarea,select,[contenteditable="true"]');
+      (target || field)?.scrollIntoView({ block: "center", behavior: "instant" });
+      target?.focus({ preventScroll: true });
+    }));
+  }, []);
+
   const validateClient = useCallback((values: FormValues) => {
     const errors: Record<string, string[]> = {};
     if (values.title.trim().length < 2) errors.title = ["Title must be at least 2 characters."];
@@ -117,6 +165,8 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
     if (values.ogImage && !values.ogImageDecorative && values.ogImageAlt.trim().length < 3) errors.ogImageAlt = ["Alt text is required unless the image is decorative."];
     if (values.seoTitle.length > 70) errors.seoTitle = ["SEO title must be 70 characters or fewer."];
     if (values.seoDescription.length > 170) errors.seoDescription = ["SEO description must be 170 characters or fewer."];
+    if (!values.publishedAt || !Number.isFinite(Date.parse(values.publishedAt))) errors.publishedAt = ["Choose a valid publication date."];
+    if (values.status === "scheduled" && (!values.scheduledAt || !Number.isFinite(Date.parse(values.scheduledAt)))) errors.scheduledAt = ["Choose a schedule date and time."];
     sections.forEach((section, sectionIndex) => {
       if (!section.heading.trim()) errors[`sections.${sectionIndex}.heading`] = ["Section heading is required."];
       section.blocks.forEach((block, blockIndex) => {
@@ -125,15 +175,19 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
       });
     });
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    return errors;
   }, [sections]);
 
   const save = useCallback(async (statusOverride?: FormValues["status"], automatic = false) => {
     if (savingRef.current || (automatic && !recordId)) return false;
     const values = getValues();
     const nextStatus = role === "editor" ? "draft" : statusOverride || values.status;
-    const nextValues = { ...values, status: nextStatus };
-    if (!validateClient(nextValues)) { setSaveState("error"); if (!automatic) notify("Please correct the highlighted fields.", "error"); return false; }
+    const nextValues = { ...values, status: nextStatus,
+      ...(customAuthor ? {} : { authorImage: "", authorImageAlt: "" }),
+      ...(customSocialImage ? {} : { ogImage: "", ogImageAlt: "" }),
+    };
+    const errors = validateClient(nextValues);
+    if (Object.keys(errors).length) { setSaveState("error"); if (!automatic) { revealErrors(errors); notify("Please correct the highlighted fields.", "error"); } return false; }
     const startedAtVersion = changeVersion.current;
     const payload: Record<string, unknown> = {
       title: values.title, slug: values.slug, excerpt: values.excerpt, content: values.content,
@@ -141,14 +195,14 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
       featuredImageWidth: numberOrUndefined(values.featuredImageWidth), featuredImageHeight: numberOrUndefined(values.featuredImageHeight), featuredImageDecorative: values.featuredImageDecorative,
       category: values.category, tags: values.tags.split(",").map((tag) => tag.trim()).filter(Boolean), status: nextStatus,
       publishedAt: new Date(values.publishedAt).toISOString(), scheduledAt: values.scheduledAt ? new Date(values.scheduledAt).toISOString() : undefined,
-      isFeatured: values.isFeatured, seoTitle: values.seoTitle, seoDescription: values.seoDescription, ogImage: values.ogImage, ogImageAlt: values.ogImageAlt,
-      ogImageCaption: values.ogImageCaption, ogImageWidth: numberOrUndefined(values.ogImageWidth), ogImageHeight: numberOrUndefined(values.ogImageHeight), ogImageDecorative: values.ogImageDecorative,
+      isFeatured: values.isFeatured, seoTitle: values.seoTitle, seoDescription: values.seoDescription, ogImage: customSocialImage ? values.ogImage : "", ogImageAlt: customSocialImage ? values.ogImageAlt : "",
+      ogImageCaption: customSocialImage ? values.ogImageCaption : "", ogImageWidth: customSocialImage ? numberOrUndefined(values.ogImageWidth) : undefined, ogImageHeight: customSocialImage ? numberOrUndefined(values.ogImageHeight) : undefined, ogImageDecorative: customSocialImage && values.ogImageDecorative,
       version,
     };
     if (collection === "posts" || collection === "places") Object.assign(payload, {
-      sections, gallery, commentsEnabled: values.commentsEnabled, readingTime: numberOrUndefined(values.readingTime), authorName: values.authorName, authorTitle: values.authorTitle,
-      authorBio: values.authorBio, authorImage: values.authorImage, authorImageAlt: values.authorImageAlt, authorImageCaption: values.authorImageCaption,
-      authorImageWidth: numberOrUndefined(values.authorImageWidth), authorImageHeight: numberOrUndefined(values.authorImageHeight), authorImageDecorative: values.authorImageDecorative,
+      sections, gallery, commentsEnabled: values.commentsEnabled, readingTime: values.readingTime ? Number(values.readingTime) : null, authorName: customAuthor ? values.authorName : "", authorTitle: customAuthor ? values.authorTitle : "",
+      authorBio: customAuthor ? values.authorBio : "", authorImage: customAuthor ? values.authorImage : "", authorImageAlt: customAuthor ? values.authorImageAlt : "", authorImageCaption: customAuthor ? values.authorImageCaption : "",
+      authorImageWidth: customAuthor ? numberOrUndefined(values.authorImageWidth) : undefined, authorImageHeight: customAuthor ? numberOrUndefined(values.authorImageHeight) : undefined, authorImageDecorative: customAuthor && values.authorImageDecorative,
     });
     if (collection === "places") Object.assign(payload, { country: values.country, location: values.location });
     if (collection === "projects") Object.assign(payload, { gallery, technologies: values.technologies.split(",").map((item) => item.trim()).filter(Boolean), projectUrl: values.projectUrl, repositoryUrl: values.repositoryUrl, year: numberOrUndefined(values.year) });
@@ -162,14 +216,18 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
     setSaving(false);
     if (!result.ok) {
       const error = result.error as ApiError;
-      setFieldErrors(error.fieldErrors || {});
+      const serverErrors = normalizeEditorFieldErrors(error.fieldErrors || {});
+      setFieldErrors(serverErrors);
+      if (!automatic) revealErrors(serverErrors);
       setSaveState("error");
       notify(error.message, "error");
       return false;
     }
     const nextId = String(result.data._id || recordId || "");
     setVersion(Number(result.data.version || version + 1));
+    silentChange.current = true;
     setValue("status", nextStatus, { shouldDirty: false });
+    silentChange.current = false;
     setLastSaved(new Date());
     if (changeVersion.current === startedAtVersion) setSaveState("saved");
     else setSaveState("dirty");
@@ -183,7 +241,7 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
       router.replace(`/admin/${collection}/${nextId}/edit`);
     }
     return nextId || true;
-  }, [collection, gallery, getValues, notify, recordId, role, router, sections, setValue, validateClient, version]);
+  }, [collection, customAuthor, customSocialImage, gallery, getValues, notify, recordId, revealErrors, role, router, sections, setValue, validateClient, version]);
 
   useEffect(() => {
     if (!recordId || saveState !== "dirty" || saving) return;
@@ -218,31 +276,69 @@ export function ContentForm({ collection, id, role }: { collection: ContentColle
   const onSections = (value: BuilderSection[]) => { setSections(value); markDirty(); };
   const onGallery = (value: ArticleImage[]) => { setGallery(value); markDirty(); };
   const title = `${recordId ? "Edit" : "New"} ${contentLabels[collection]}`;
+  const isArticle = collection === "posts" || collection === "places";
+  const tagCount = watch("tags").split(",").filter((tag) => tag.trim()).length;
+  const panelErrorCount = (panel: EditorSettingsPanel) => Object.keys(fieldErrors).filter((field) => settingsPanelForField(field) === panel).length;
+  const togglePanel = (panel: EditorSettingsPanel) => setOpenPanel((current) => current === panel ? null : panel);
+  const publicUrl = status === "published" && recordId ? `${publicBases[collection]}/${slug}` : undefined;
   if (!loaded) return <div className="admin-panel"><p>Loading editor…</p></div>;
 
   return <>
     <div className="admin-top"><h1>{title}</h1><Link className="text-link" href={`/admin/${collection}`}>Back to list</Link></div>
-    <form className="admin-editor-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+    <form ref={formRef} className="admin-editor-form" noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <PublishPanel role={role} status={status} saving={saving} saveState={saveState} lastSaved={lastSaved} canPreview={Boolean(recordId)} onSaveDraft={saveDraft} onPublish={publish} onPreview={preview} onSettings={() => setDrawerOpen(true)} settingsOpen={drawerOpen} settingsId={settingsId}/>
       <div className="editor-main-column">
         <section className="admin-panel form-section"><h2>Story details</h2><div className="field-grid"><Field label="Title" error={fieldErrors.title}><input {...register("title")} onChange={(event) => { setValue("title", event.target.value); if (!recordId) setValue("slug", slugify(event.target.value)); markDirty(); }}/></Field><Field label="Slug" error={fieldErrors.slug}><input {...register("slug")}/></Field></div><Field label="Excerpt" error={fieldErrors.excerpt}><textarea {...register("excerpt")} rows={4}/></Field><Field label={collection === "posts" || collection === "places" ? "Article introduction" : "Description"} error={fieldErrors.content}><RichTextEditor value={watch("content")} onChange={(value) => { setValue("content", value); markDirty(); }}/></Field>{collection === "places" && <div className="field-grid"><Field label="Country"><input {...register("country")}/></Field><Field label="Location"><input {...register("location")}/></Field></div>}{collection === "photography" && <Field label="Location"><input {...register("location")}/></Field>}{collection === "projects" && <><div className="field-grid"><Field label="Technologies, comma separated"><input {...register("technologies")}/></Field><Field label="Year"><input type="number" {...register("year")}/></Field></div><div className="field-grid"><Field label="Project URL"><input type="url" {...register("projectUrl")}/></Field><Field label="Repository URL"><input type="url" {...register("repositoryUrl")}/></Field></div></>}</section>
         {(collection === "posts" || collection === "places") && <ArticleBuilder sections={sections} onChange={onSections} errors={fieldErrors}/>}
         <GalleryEditor images={gallery} onChange={onGallery} label={collection === "posts" || collection === "places" ? "Article gallery" : "Image gallery"}/>
         {recordId && (collection === "posts" || collection === "places") && <RevisionHistory collection={collection} id={recordId} refreshKey={revisionRefreshKey} onRestored={load}/>}</div>
-      <div className="editor-side-column">
-        <PublishPanel role={role} status={status} scheduledAt={scheduledAt} featured={featured} saving={saving} saveState={saveState} lastSaved={lastSaved} canPreview={Boolean(recordId)} publicUrl={status === "published" && recordId ? `${publicBases[collection]}/${slug}` : undefined} onStatus={(value) => { setValue("status", value as FormValues["status"]); markDirty(); }} onSchedule={(value) => { setValue("scheduledAt", value); markDirty(); }} onFeatured={(value) => { setValue("isFeatured", value); markDirty(); }} onSaveDraft={saveDraft} onPublish={publish} onPreview={preview} onTrash={() => setTrashOpen(true)}/>
-        <section className="admin-panel form-section"><h2>Taxonomy</h2><Field label="Category" error={fieldErrors.category}><input {...register("category")}/></Field><Field label="Tags, comma separated"><input {...register("tags")}/></Field></section>
-        {(collection === "posts" || collection === "places") && <section className="admin-panel form-section"><h2>Discussion</h2><label className="check-label"><input type="checkbox" {...register("commentsEnabled")}/> Enable comments</label><p className="builder-hint">Approved comments remain visible when comments are closed; new submissions are disabled.</p></section>}
-        <section className="admin-panel form-section"><h2>Featured image</h2><ImageUrlField value={featureImage} onChange={setFeaturedImage} error={fieldErrors.featuredImage?.[0] || fieldErrors.imageAlt?.[0]}/></section>
-        {(collection === "posts" || collection === "places") && <section className="admin-panel form-section"><h2>Author</h2><Field label="Author name"><input {...register("authorName")}/></Field><Field label="Author title"><input {...register("authorTitle")}/></Field><Field label="Author biography"><textarea {...register("authorBio")} rows={4}/></Field><ImageUrlField value={authorImage} onChange={setAuthorImage} label="Author image" error={fieldErrors.authorImage?.[0] || fieldErrors.authorImageAlt?.[0]}/><Field label="Reading time (minutes)"><input type="number" min="1" {...register("readingTime")}/></Field></section>}
-        <section className="admin-panel form-section"><h2>SEO</h2><Field label={`SEO title (${watch("seoTitle").length}/70)`} error={fieldErrors.seoTitle}><input {...register("seoTitle")}/></Field><Field label={`SEO description (${watch("seoDescription").length}/170)`} error={fieldErrors.seoDescription}><textarea {...register("seoDescription")} rows={4}/></Field><ImageUrlField value={ogImage} onChange={setOgImage} label="Open Graph image" error={fieldErrors.ogImage?.[0] || fieldErrors.ogImageAlt?.[0]}/></section>
-      </div>
+      <ArticleSettingsDrawer open={drawerOpen} onClose={closeDrawer} drawerId={settingsId}>
+        <details className="publication-options" open={publicationOpen}>
+          <summary onClick={(event) => { event.preventDefault(); setPublicationOpen((current) => !current); }}>Publication settings{(fieldErrors.status || fieldErrors.publishedAt || fieldErrors.scheduledAt) && <span className="settings-error-badge" aria-label="Publication validation error">!</span>}</summary>
+          <Field label="Publication status" error={fieldErrors.status}><select {...register("status")} disabled={role !== "admin"}><option value="draft">Draft</option><option value="published">Published</option><option value="scheduled">Scheduled</option></select></Field>
+          {role !== "admin" && <p className="builder-hint">Editors can save and preview drafts; an administrator publishes them.</p>}
+          <Field label="Publication date" error={fieldErrors.publishedAt}><input type="date" {...register("publishedAt")}/></Field>
+          {status === "scheduled" && <Field label="Schedule date and time" error={fieldErrors.scheduledAt}><input type="datetime-local" {...register("scheduledAt")} disabled={role !== "admin"}/></Field>}
+          <label className="check-label"><input type="checkbox" checked={featured} onChange={(event) => { setValue("isFeatured", event.target.checked); markDirty(); }}/> Feature this item</label>
+          {publicUrl && <a className="public-url" href={publicUrl} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Open public URL</a>}
+          <button type="button" className="trash-button" onClick={() => { setDrawerOpen(false); setTrashOpen(true); }} disabled={role !== "admin" || !recordId || saving}><Trash2 size={15}/> Move to Trash</button>
+        </details>
+        <SettingsAccordion title="Featured Image" summary={featureImage.url ? <><ImageThumbnail url={featureImage.url}/> Image selected</> : "Image missing"} open={openPanel === "featured"} onToggle={() => togglePanel("featured")} errorCount={panelErrorCount("featured")}>
+          <ImageUrlField sidebar value={featureImage} onChange={setFeaturedImage} fieldNames={featuredFields} errors={fieldErrors}/>
+        </SettingsAccordion>
+        <SettingsAccordion title="Category & Tags" summary={`${watch("category") || "No category"} · ${tagCount} ${tagCount === 1 ? "tag" : "tags"}`} open={openPanel === "taxonomy"} onToggle={() => togglePanel("taxonomy")} errorCount={panelErrorCount("taxonomy")}>
+          <Field label="Category" error={fieldErrors.category}><input {...register("category")}/></Field><Field label="Tags, comma separated" error={fieldErrors.tags}><input {...register("tags")}/></Field>
+        </SettingsAccordion>
+        <SettingsAccordion title="SEO" summary={watch("seoTitle") || watch("seoDescription") || (customSocialImage && ogImage.url) ? "Custom SEO" : "Default SEO"} open={openPanel === "seo"} onToggle={() => togglePanel("seo")} errorCount={panelErrorCount("seo")}>
+          <Field label={`SEO title (${watch("seoTitle").length}/70)`} error={fieldErrors.seoTitle}><input {...register("seoTitle")}/></Field>
+          <Field label={`SEO description (${watch("seoDescription").length}/170)`} error={fieldErrors.seoDescription}><textarea {...register("seoDescription")} rows={3}/></Field>
+          <label className="check-label"><input type="checkbox" checked={customSocialImage} onChange={(event) => { setCustomSocialImage(event.target.checked); markDirty(); }}/> Use a different social image</label>
+          {!customSocialImage && <div className="settings-fallback-preview"><ImageThumbnail url={featureImage.url}/><p>The featured image will be used for social sharing.</p></div>}
+          <div hidden={!customSocialImage}><ImageUrlField sidebar value={ogImage} onChange={setOgImage} label="Open Graph image" fieldNames={socialFields} errors={fieldErrors}/></div>
+        </SettingsAccordion>
+        {isArticle && <SettingsAccordion title="Author" summary={customAuthor ? watch("authorName") || defaultAuthor.name : defaultAuthor.name} open={openPanel === "author"} onToggle={() => togglePanel("author")} errorCount={panelErrorCount("author")}>
+          <div className="settings-default-author"><ImageThumbnail url={defaultAuthor.image}/><div><strong>{defaultAuthor.name}</strong><small>{defaultAuthor.title}</small></div></div>
+          <label className="check-label"><input type="checkbox" checked={!customAuthor} onChange={(event) => { setCustomAuthor(!event.target.checked); markDirty(); }}/> Use default author</label>
+          {!customAuthor && <><p className="builder-hint">Site settings provide the author name, title, biography and image when saved. Your custom values remain available during this editing session.</p><button type="button" className="settings-customize-button" onClick={() => { setCustomAuthor(true); markDirty(); }}>Customize author</button></>}
+          <div hidden={!customAuthor}>
+            <Field label="Author name" error={fieldErrors.authorName}><input {...register("authorName")}/></Field><Field label="Author title" error={fieldErrors.authorTitle}><input {...register("authorTitle")}/></Field><Field label="Author biography" error={fieldErrors.authorBio}><textarea {...register("authorBio")} rows={3}/></Field>
+            <ImageUrlField sidebar value={authorImage} onChange={setAuthorImage} label="Author image" fieldNames={authorFields} errors={fieldErrors}/>
+          </div>
+          <section className="settings-reading-time"><h3>Reading time</h3><Field label="Manual override (minutes)" error={fieldErrors.readingTime}><input type="number" min="1" {...register("readingTime")}/></Field><p className="builder-hint">Leave blank to calculate from the article.</p></section>
+        </SettingsAccordion>}
+        {isArticle && <SettingsAccordion title="Discussion" summary={watch("commentsEnabled") ? "Comments enabled" : "Comments disabled"} open={openPanel === "discussion"} onToggle={() => togglePanel("discussion")} errorCount={panelErrorCount("discussion")}>
+          <label className="check-label"><input type="checkbox" {...register("commentsEnabled")}/> Enable comments</label><p className="builder-hint">Approved comments remain visible when comments are closed; new submissions are disabled.</p>
+        </SettingsAccordion>}
+      </ArticleSettingsDrawer>
     </form>
     <ConfirmationDialog open={trashOpen} title="Move this content to Trash?" description="It will be removed from public queries immediately and can be restored by an administrator." confirmLabel="Move to Trash" busy={saving} onConfirm={trash} onClose={() => setTrashOpen(false)}/>
   </>;
 }
 
 function Field({ label, error, children }: { label: string; error?: string[]; children: React.ReactNode }) {
-  return <div className="field"><label>{label}</label>{children}{error && <span className="field-error">{error.join(" ")}</span>}</div>;
+  const id = useId();
+  const nativeField = isValidElement<{ id?: string; "aria-invalid"?: boolean; "aria-describedby"?: string }>(children) && typeof children.type === "string";
+  return <div className="field"><label htmlFor={nativeField ? id : undefined}>{label}</label>{nativeField ? cloneElement(children, { id, "aria-invalid": Boolean(error), "aria-describedby": error ? `${id}-error` : undefined }) : children}{error && <span id={`${id}-error`} className="field-error">{error.join(" ")}</span>}</div>;
 }
 
 function GalleryEditor({ images, onChange, label }: { images: ArticleImage[]; onChange: (images: ArticleImage[]) => void; label: string }) {
